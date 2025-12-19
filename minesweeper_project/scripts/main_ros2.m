@@ -25,8 +25,8 @@ fprintf('Speed: %dx | Robot velocity: %.1f m/s\n\n', speedMultiplier, robot.max_
 
 %% Step 1: Create Simple Grid World (10x10 like original)
 fprintf('Creating world...\n');
-gridRows = 20;
-gridCols = 20;
+gridRows = 5;
+gridCols = 5;
 cellSize = 1.0;
 mineDensity = 0.15;
 

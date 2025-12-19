@@ -25,10 +25,11 @@ fprintf('Speed: %dx | Robot velocity: %.1f m/s\n\n', speedMultiplier, robot.max_
 
 %% Step 1: Create Simple Grid World (10x10 like original)
 fprintf('Creating world...\n');
-gridRows = 5;
-gridCols = 5;
+gridRows = 20;
+gridCols = 20;
 cellSize = 1.0;
 mineDensity = 0.15;
+numObstacles = 10;  % Number of obstacles
 
 % Create mine map (random placement)
 numMines = round(gridRows * gridCols * mineDensity);
@@ -46,11 +47,25 @@ while placedMines < numMines
     end
 end
 
+% Create obstacle map (blocks robot cannot pass through)
+obstacleMap = false(gridRows, gridCols);
+placedObstacles = 0;
+while placedObstacles < numObstacles
+    r = randi(gridRows);
+    c = randi(gridCols);
+    % Avoid start zone, end zone, and mines
+    if ~obstacleMap(r,c) && ~mineMap(r,c) && ...
+       ~(r <= 2 && c <= 2) && ~(r >= gridRows-1 && c >= gridCols-1)
+        obstacleMap(r,c) = true;
+        placedObstacles = placedObstacles + 1;
+    end
+end
+
 % Track detected/marked mines  
 detectedMap = false(gridRows, gridCols);
 markedMap = false(gridRows, gridCols);
 
-fprintf('World: %dx%d grid, %d mines\n\n', gridRows, gridCols, numMines);
+fprintf('World: %dx%d grid, %d mines, %d obstacles\n\n', gridRows, gridCols, numMines, numObstacles);
 
 %% Step 2: Initialize ROS2
 fprintf('Initializing ROS2...\n');
@@ -91,10 +106,10 @@ fprintf('Path: %d waypoints\n\n', size(path,1));
 
 %% Step 5: Create Fast Visualization
 fig = figure('Name', 'Minesweeper ROS2 (Fast)', 'NumberTitle', 'off', ...
-            'Position', [100 100 800 700], 'Color', [0.15 0.15 0.15]);
+            'Position', [100 100 900 750], 'Color', [0.15 0.15 0.15]);
 
 % Draw initial grid
-ax = axes('Position', [0.1 0.15 0.8 0.75]);
+ax = axes('Position', [0.1 0.12 0.8 0.78]);
 hold on;
 axis equal;
 xlim([0, gridCols*cellSize]);
@@ -110,17 +125,26 @@ for i = 0:gridRows
     plot([0 gridCols]*cellSize, [i i]*cellSize, 'Color', [0.4 0.4 0.4]);
 end
 
+% ===== PRE-DEFINED MINES - Show mines as RED X from the start =====
+[mineRows, mineCols] = find(mineMap);
+mineWorldX = (mineCols - 0.5) * cellSize;
+mineWorldY = (mineRows - 0.5) * cellSize;
+hMinesVisible = plot(mineWorldX, mineWorldY, 'rx', 'MarkerSize', 15, 'LineWidth', 3, 'DisplayName', 'Mines');
+
 % Graphics handles
 hRobot = plot(robotPos(1), robotPos(2), 'bo', 'MarkerSize', 20, ...
-             'MarkerFaceColor', [0.2 0.6 1], 'LineWidth', 2);
-hTrail = plot(NaN, NaN, 'g-', 'LineWidth', 2);
-hMarked = plot(NaN, NaN, 'go', 'MarkerSize', 25, 'LineWidth', 3);
-hDetected = plot(NaN, NaN, 'yo', 'MarkerSize', 20, 'LineWidth', 2);
+             'MarkerFaceColor', [0.2 0.6 1], 'LineWidth', 2, 'DisplayName', 'Robot');
+hTrail = plot(NaN, NaN, 'c-', 'LineWidth', 1.5, 'DisplayName', 'Trail');
+
+% Handle for detected mines - GREEN CIRCLES
+hDetectedMines = plot(NaN, NaN, 'go', 'MarkerSize', 30, 'LineWidth', 4, 'DisplayName', 'Detected');
 
 title('MINESWEEPER ROS2 SIMULATION', 'Color', 'w', 'FontSize', 14);
+legend([hRobot, hMinesVisible, hDetectedMines], {'Robot', 'Mines (predefined)', 'Detected'}, ...
+       'Location', 'northeast', 'TextColor', 'w', 'Color', [0.2 0.2 0.2]);
 
 % Status text
-hStatus = uicontrol('Style', 'text', 'Position', [10 10 780 40], ...
+hStatus = uicontrol('Style', 'text', 'Position', [10 10 880 40], ...
     'BackgroundColor', [0.15 0.15 0.15], 'ForegroundColor', 'w', ...
     'FontSize', 12, 'HorizontalAlignment', 'left');
 
@@ -212,12 +236,12 @@ while time < maxTime && isvalid(fig)
     set(hRobot, 'XData', robotPos(1), 'YData', robotPos(2));
     set(hTrail, 'XData', trail(:,1), 'YData', trail(:,2));
     
-    % Show marked mines
+    % Show detected mines as GREEN CIRCLES
     [mr, mc] = find(markedMap);
     if ~isempty(mr)
-        mx = (mc - 0.5) * cellSize;
-        my = (mr - 0.5) * cellSize;
-        set(hMarked, 'XData', mx, 'YData', my);
+        detectedX = (mc - 0.5) * cellSize;
+        detectedY = (mr - 0.5) * cellSize;
+        set(hDetectedMines, 'XData', detectedX, 'YData', detectedY);
     end
     
     % Update status

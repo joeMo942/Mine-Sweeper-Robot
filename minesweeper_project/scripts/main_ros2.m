@@ -25,11 +25,11 @@ fprintf('Speed: %dx | Robot velocity: %.1f m/s\n\n', speedMultiplier, robot.max_
 
 %% Step 1: Create Simple Grid World (10x10 like original)
 fprintf('Creating world...\n');
-gridRows = 20;
-gridCols = 20;
+gridRows = 5;
+gridCols = 5;
 cellSize = 1.0;
-mineDensity = 0.15;
-numObstacles = 10;  % Number of obstacles
+mineDensity = 0.1;
+numObstacles = 4;  % Number of obstacles
 
 % Create mine map (random placement)
 numMines = round(gridRows * gridCols * mineDensity);
@@ -87,7 +87,7 @@ robotPos = [0.5, 0.5];  % Start position
 robotHeading = 0;
 robotVel = robot.max_velocity;
 
-%% Step 4: Generate Path (boustrophedon)
+%% Step 4: Generate Path (boustrophedon - avoid obstacles)
 path = [];
 direction = 1;
 for row = 1:gridRows
@@ -97,12 +97,15 @@ for row = 1:gridRows
         cols = gridCols:-1:1;
     end
     for col = cols
-        path(end+1,:) = [(col-0.5)*cellSize, (row-0.5)*cellSize];
+        % Skip obstacle cells
+        if ~obstacleMap(row, col)
+            path(end+1,:) = [(col-0.5)*cellSize, (row-0.5)*cellSize];
+        end
     end
     direction = -direction;
 end
 waypointIdx = 1;
-fprintf('Path: %d waypoints\n\n', size(path,1));
+fprintf('Path: %d waypoints (avoiding %d obstacles)\n\n', size(path,1), numObstacles);
 
 %% Step 5: Create Fast Visualization
 fig = figure('Name', 'Minesweeper ROS2 (Fast)', 'NumberTitle', 'off', ...
@@ -125,6 +128,17 @@ for i = 0:gridRows
     plot([0 gridCols]*cellSize, [i i]*cellSize, 'Color', [0.4 0.4 0.4]);
 end
 
+% ===== OBSTACLES - Gray filled squares =====
+[obsRows, obsCols] = find(obstacleMap);
+for i = 1:length(obsRows)
+    ox = (obsCols(i) - 1) * cellSize;
+    oy = (obsRows(i) - 1) * cellSize;
+    rectangle('Position', [ox+0.05, oy+0.05, cellSize-0.1, cellSize-0.1], ...
+             'FaceColor', [0.5 0.5 0.5], 'EdgeColor', [0.3 0.3 0.3], 'LineWidth', 2);
+end
+hObstacles = plot(NaN, NaN, 's', 'MarkerSize', 15, 'MarkerFaceColor', [0.5 0.5 0.5], ...
+                 'MarkerEdgeColor', 'k', 'DisplayName', 'Obstacles');
+
 % ===== PRE-DEFINED MINES - Show mines as RED X from the start =====
 [mineRows, mineCols] = find(mineMap);
 mineWorldX = (mineCols - 0.5) * cellSize;
@@ -140,7 +154,8 @@ hTrail = plot(NaN, NaN, 'c-', 'LineWidth', 1.5, 'DisplayName', 'Trail');
 hDetectedMines = plot(NaN, NaN, 'go', 'MarkerSize', 30, 'LineWidth', 4, 'DisplayName', 'Detected');
 
 title('MINESWEEPER ROS2 SIMULATION', 'Color', 'w', 'FontSize', 14);
-legend([hRobot, hMinesVisible, hDetectedMines], {'Robot', 'Mines (predefined)', 'Detected'}, ...
+legend([hRobot, hMinesVisible, hObstacles, hDetectedMines], ...
+       {'Robot', 'Mines', 'Obstacles', 'Detected'}, ...
        'Location', 'northeast', 'TextColor', 'w', 'Color', [0.2 0.2 0.2]);
 
 % Status text
@@ -266,15 +281,15 @@ fprintf('================================================\n');
 %% Calculate and Show Shortest Safe Path in SAME FIGURE
 fprintf('\nCalculating shortest safe path...\n');
 
-% Create obstacle map (mines + any obstacles)
-obstacleMap = mineMap;  % Treat all mines as obstacles for path planning
+% Create combined obstacle map (mines + obstacles)
+combinedObstacleMap = mineMap | obstacleMap;  % Avoid both mines and obstacles
 
 % Start and end positions
 startPos = [1, 1];
 endPos = [gridRows, gridCols];
 
 % Find shortest path using A* algorithm
-shortestPath = findShortestPath(obstacleMap, startPos, endPos);
+shortestPath = findShortestPath(combinedObstacleMap, startPos, endPos);
 
 % Draw path on the SAME figure (reuse existing figure)
 figure(fig);  % Bring simulation figure to front

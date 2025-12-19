@@ -1,35 +1,50 @@
-% main_ros2.m - OPTIMIZED Fast Minesweeper ROS2 Simulation
-% Uses simple grid visualization for speed + ROS2 integration
+% main_ros2.m - Minesweeper Robot ROS2 Simulation with SLAM
 %
-% Usage: Run this script to start the simulation
+% Main entry point for the simulation.
+% All configuration is loaded from: config/robot_params.m
+%
+% Usage: 
+%   >> main_ros2
 
 %% Clear environment
 clear; clc; close all;
 
 fprintf('================================================\n');
-fprintf('  MINESWEEPER ROBOT - FAST ROS2 SIMULATION\n');
+fprintf('  MINESWEEPER ROBOT - ROS2 SIMULATION WITH SLAM\n');
 fprintf('================================================\n\n');
 
-%% Configuration
+%% Load Configuration from robot_params.m
 thisDir = fileparts(mfilename('fullpath'));
-addpath(thisDir);
-addpath(fullfile(thisDir, '..', 'config'));
-run('robot_params.m');
+addpath(genpath(fullfile(thisDir, '..')));  % Add all project folders
 
-% Fast simulation parameters
-dt = 0.005;              % Small timestep for quality
-maxTime = 1000;          % Max time
-speedMultiplier = 5;    % Process 5 steps per viz update
+fprintf('Loading configuration...\n');
+params = robot_params();  % Load all parameters from config file
 
-fprintf('Speed: %dx | Robot velocity: %.1f m/s\n\n', speedMultiplier, robot.max_velocity);
+% Extract parameters for convenience
+robot = params.robot;
+world = params.world;
+sim = params.sim;
+lidar = params.lidar;
+viz = params.viz;
 
-%% Step 1: Create Simple Grid World (10x10 like original)
+% Simulation parameters
+dt = sim.dt;
+maxTime = sim.max_time;
+speedMultiplier = sim.speed_multiplier;
+
+fprintf('  Grid: %dx%d | Mines: %.0f%% | Obstacles: %d\n', ...
+    world.grid_rows, world.grid_cols, world.mine_density*100, world.num_obstacles);
+fprintf('  Robot speed: %.1f m/s | Lidar range: %.1f m\n', ...
+    robot.max_velocity, lidar.range);
+fprintf('  Speed multiplier: %dx\n\n', speedMultiplier);
+
+%% Step 1: Create World
 fprintf('Creating world...\n');
-gridRows = 5;
-gridCols = 5;
-cellSize = 1.0;
-mineDensity = 0.1;
-numObstacles = 4;  % Number of obstacles
+gridRows = world.grid_rows;
+gridCols = world.grid_cols;
+cellSize = world.cell_size;
+mineDensity = world.mine_density;
+numObstacles = world.num_obstacles;
 
 % Create mine map (random placement)
 numMines = round(gridRows * gridCols * mineDensity);
@@ -267,13 +282,12 @@ while time < maxTime && isvalid(fig)
         nextGridR = max(1, min(gridRows, floor(nextY/cellSize) + 1));
         nextGridC = max(1, min(gridCols, floor(nextX/cellSize) + 1));
         
-        % ===== LIDAR SIMULATION =====
-        % Realistic lidar with ray casting
+        % ===== LIDAR SIMULATION (params from config) =====
         obstacleDiscovered = false;
         mineDiscovered = false;
         
-        lidarRange = 3.0;           % Lidar range in meters
-        lidarAngles = 0:5:359;      % 360-degree scan, 5-degree resolution for better point cloud
+        lidarRange = lidar.range;       % From config
+        lidarAngles = lidar.angles;     % From config
         numRays = length(lidarAngles);
         
         currentGridR = max(1, min(gridRows, floor(robotPos(2)/cellSize) + 1));

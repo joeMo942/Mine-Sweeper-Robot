@@ -1,131 +1,166 @@
-# Minesweeper Robot Project
+# Minesweeper Robot ROS2 Simulation
 
-A MATLAB/Simulink-based minesweeper robot simulation with ROS2 integration.
+A complete MATLAB/Simulink simulation of a minesweeper robot with ROS2 integration, SLAM mapping, and Stateflow-based finite state machine.
 
-## Overview
+[![MATLAB](https://img.shields.io/badge/MATLAB-R2023a+-orange.svg)](https://www.mathworks.com/products/matlab.html)
+[![Simulink](https://img.shields.io/badge/Simulink-Required-blue.svg)](https://www.mathworks.com/products/simulink.html)
+[![ROS2](https://img.shields.io/badge/ROS2-Humble-green.svg)](https://docs.ros.org/en/humble/)
 
-This project simulates a minesweeper robot that navigates a minefield, detects mines using sensors, and marks their locations. The robot uses a systematic coverage path planning algorithm and communicates via ROS2 topics.
+## 🎯 Project Overview
 
-## Features
+This project simulates a robot that:
+- **Explores** an unknown environment using a boustrophedon coverage path
+- **Detects mines** and obstacles using simulated Lidar and mine detector sensors
+- **Builds a SLAM map** in real-time as it discovers obstacles
+- **Replans paths** dynamically using A* algorithm when obstacles are found
+- **Communicates via ROS2** topics for sensor data and control commands
 
-- **Grid-based Minefield**: Configurable grid size, mine density, and obstacles
-- **Robot Simulation**: Differential drive kinematics with realistic sensor models
-- **Path Planning**: Boustrophedon (lawn mower) and spiral coverage algorithms
-- **ROS2 Integration**: Publishers and subscribers for robot state and commands
-- **Real-time Visualization**: 2D visualization with robot, path, mines, and obstacles
-- **Simulink Controller**: Programmatically generated Simulink model for robot control
-
-## Project Structure
+## 📁 Project Structure
 
 ```
 minesweeper_project/
-├── scripts/
-│   ├── main.m                    # Main entry point
-│   ├── setup_project.m           # Project initialization
-│   ├── MinefieldGenerator.m      # Minefield generation class
-│   ├── MinesweeperRobot.m        # Robot class with kinematics
-│   ├── ROS2Interface.m           # ROS2 communication
-│   ├── PathPlanner.m             # Path planning algorithms
-│   ├── Visualization.m           # Real-time 2D visualization
-│   ├── runSimulation.m           # Main simulation loop
-│   ├── buildSimulinkModel.m      # Simulink model generator
-│   ├── minesweeperController.m   # Controller function
-│   └── test_simulation.m         # Quick test script
+├── README.md                      # This file
+├── setup_project.m                # Project setup script
 ├── config/
-│   └── robot_params.m            # Robot and simulation parameters
+│   └── robot_params.m             # Robot and simulation parameters
+├── docs/
+│   ├── ARCHITECTURE.md            # Technical architecture docs
+│   ├── architecture_diagram.png   # System architecture image
+│   └── stateflow_diagram.png      # FSM diagram image
 ├── models/
-│   └── (Simulink models)
+│   └── minesweeper_stateflow.slx  # Simulink/Stateflow FSM model
+├── scripts/
+│   ├── main_ros2.m                # ★ Main simulation entry point
+│   ├── buildStateflowModel.m      # Programmatic Stateflow builder
+│   ├── core/                      # Core classes
+│   │   ├── OccupancyGridWorld.m   # Occupancy grid map
+│   │   ├── MinefieldGenerator.m   # Mine/obstacle generation
+│   │   ├── MinesweeperRobot.m     # Robot model
+│   │   └── Visualization.m        # Visualization utilities
+│   ├── sensors/                   # Sensor simulation
+│   │   ├── SensorSimulator.m      # Lidar & detector simulation
+│   │   └── EKFSLAM.m              # Extended Kalman Filter SLAM
+│   ├── planning/                  # Path planning & FSM
+│   │   ├── PathPlanner.m          # Basic path planner
+│   │   ├── PathPlannerROS.m       # A* planner with ROS2
+│   │   └── StateMachine.m         # Finite State Machine
+│   └── ros2/                      # ROS2 integration
+│       ├── ROS2Interface.m        # ROS2 communication
+│       └── ROS2TopicManager.m     # Topic management
 └── results/
-    └── (Simulation logs)
+    └── ...                        # Simulation outputs
 ```
 
-## Requirements
+## 🏗️ Architecture
 
-- MATLAB R2021a or later
+The project follows a **6-step modular architecture**:
+
+![Architecture Diagram](docs/architecture_diagram.png)
+
+
+
+### Module Descriptions
+
+| Step | Module | Description |
+|------|--------|-------------|
+| 1 | **Occupancy Grid World** | Creates 20x20 grid map with mines and obstacles |
+| 2 | **Sensors & ROS2** | Lidar (360°, 3m range), Mine Detector, ROS2 topics |
+| 3 | **EKF-SLAM** | Extended Kalman Filter for localization and mapping |
+| 4 | **Stateflow FSM** | Finite State Machine: Explore, Detect, Mark, Replan |
+| 5 | **A* Path Planner** | Dynamic path planning avoiding discovered obstacles |
+| 6 | **Simulation Flow** | Main loop integrating all components |
+
+## 🔄 Stateflow State Machine
+
+The robot behavior is controlled by a Stateflow FSM with 6 states:
+
+![Stateflow Diagram](docs/stateflow_diagram.png)
+
+
+
+## 🚀 Quick Start
+
+### Prerequisites
+- MATLAB R2023a or later
 - Simulink
-- ROS Toolbox (optional - simulation mode available without it)
-- Stateflow (optional)
+- Stateflow
+- ROS Toolbox (optional, for external ROS2)
+- Navigation Toolbox (for occupancyMap)
 
-## Quick Start
+### Running the Simulation
 
-1. **Open MATLAB** and navigate to the project directory
-
-2. **Run the main script**:
+1. **Open MATLAB** and navigate to the project folder:
    ```matlab
-   cd scripts
-   main
+   cd('c:\Users\yousef\mapping\minesweeper_project')
+   addpath(genpath(pwd))
    ```
 
-3. **Or run a quick test**:
+2. **Run the main simulation**:
    ```matlab
-   cd scripts
-   test_simulation
+   main_ros2
    ```
 
-## Configuration
+3. **Build the Stateflow model** (optional):
+   ```matlab
+   buildStateflowModel('minesweeper_stateflow')
+   ```
+
+## 📊 Visualization
+
+The simulation displays a **dual-panel view**:
+
+| Left Panel (Original World) | Right Panel (SLAM Map) |
+|----------------------------|------------------------|
+| Ground truth with all obstacles | Robot's discovered knowledge |
+| Gray squares = All obstacles | Blue dots = Lidar point cloud |
+| Red X = All mines | Green circles = Detected mines |
+| Cyan trail = Robot path | Yellow line = Optimal path |
+
+### Sensor Simulation
+
+- **Lidar**: 360° scan, 5° resolution, 3m range
+- **Mine Detector**: Only detects mines in current cell
+- **Point Cloud**: Accumulates lidar hits with realistic noise
+
+## 🔌 ROS2 Topics
+
+| Topic | Message Type | Description |
+|-------|-------------|-------------|
+| `/robot/pose` | `geometry_msgs/Pose2D` | Robot position (x, y, theta) |
+| `/mine_alert` | `std_msgs/Bool` | Mine detection signal |
+| `/map` | `nav_msgs/OccupancyGrid` | SLAM occupancy grid |
+| `/cmd_vel` | `geometry_msgs/Twist` | Velocity commands |
+| `/scan` | `sensor_msgs/LaserScan` | Lidar scan data |
+
+## ⚙️ Configuration
 
 Edit `config/robot_params.m` to customize:
 
-- **Robot parameters**: velocity limits, sensor ranges
-- **Simulation parameters**: time step, grid size, mine density
-- **Visualization settings**: update rate, display options
-- **ROS2 settings**: topic names, QoS settings
-
-## ROS2 Topics
-
-| Topic | Type | Description |
-|-------|------|-------------|
-| `/robot/pose` | geometry_msgs/Pose2D | Robot position and heading |
-| `/robot/cmd_vel` | geometry_msgs/Twist | Velocity commands |
-| `/sensor/mine_detector` | std_msgs/Bool | Mine detection status |
-| `/robot/mine_marked` | geometry_msgs/Point | Marked mine location |
-| `/simulation/status` | std_msgs/String | Simulation status |
-
-## Simulink Model
-
-To generate the Simulink controller model:
-
 ```matlab
-cd scripts
-buildSimulinkModel('minesweeper_controller')
+robot.max_velocity = 2.0;       % m/s
+robot.max_angular_velocity = 3.0; % rad/s
+sim.dt = 0.005;                  % Timestep
+grid.rows = 20;                  % Grid size
+grid.cols = 20;
+mineDensity = 0.15;              % 15% mines
+numObstacles = 10;               % Number of obstacles
 ```
 
-This creates a model with:
-- ROS2 input subsystem (subscribers)
-- Controller subsystem (MATLAB Function block)
-- ROS2 output subsystem (publishers)
+## 📈 Features
 
-## Usage Examples
+- ✅ Occupancy Grid SLAM with real-time visualization
+- ✅ Lidar point cloud simulation (MathWorks style)
+- ✅ Dynamic A* path replanning
+- ✅ Stateflow FSM for robot behavior
+- ✅ ROS2 integration ready
+- ✅ Dual-panel visualization (Original vs SLAM)
+- ✅ Mine and obstacle avoidance
+- ✅ Shortest path calculation after exploration
 
-### Custom Minefield
+## 📝 License
 
-```matlab
-% Create custom 15x15 field with 20% mines
-field = MinefieldGenerator(15, 15, 0.20, 8);
-field.generateField([1, 1]);
-field.displayStats();
-```
+This project is for educational purposes.
 
-### Different Path Algorithm
+## 👤 Author
 
-```matlab
-% Use spiral path instead of boustrophedon
-planner = PathPlanner([10, 10], 1.0, 'spiral');
-planner.planPath([0.5, 0.5], field);
-```
-
-### Adjust Robot Speed
-
-```matlab
-% Faster robot
-robotParams.max_velocity = 1.0;
-robotParams.max_angular_velocity = 2.0;
-```
-
-## License
-
-This project is provided as-is for educational purposes.
-
-## Author
-
-Minesweeper Project - December 2025
+Yousef - Minesweeper Robot ROS2 Simulation Project

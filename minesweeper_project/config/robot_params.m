@@ -1,56 +1,71 @@
-% robot_params.m - Robot and Simulation Parameters
-% Minesweeper Robot Project with MATLAB Simulink and ROS2
+function params = robot_params()
+% ROBOT_PARAMS - Central configuration for Minesweeper Robot Simulation
+%
+% Usage:
+%   params = robot_params();
+%   % Access parameters:
+%   params.robot.max_velocity
+%   params.sim.grid_rows
+%   params.lidar.range
+%
+% Returns a struct containing all simulation parameters.
 
-%% Robot Physical Parameters
-robot.max_velocity = 2.0;           % Maximum linear velocity (m/s) - INCREASED for faster sim
-robot.max_angular_velocity = 3.0;   % Maximum angular velocity (rad/s) - INCREASED
-robot.width = 0.3;                  % Robot width (m)
-robot.length = 0.4;                 % Robot length (m)
-robot.wheelbase = 0.25;             % Distance between wheels (m)
+%% ==================== ROBOT PARAMETERS ====================
+params.robot.max_velocity = 2.0;           % Maximum linear velocity (m/s)
+params.robot.max_angular_velocity = 3.0;   % Maximum angular velocity (rad/s)
+params.robot.width = 0.3;                  % Robot width (m)
+params.robot.length = 0.4;                 % Robot length (m)
+params.robot.start_position = [0.5, 0.5];  % Starting position [x, y] in meters
 
-%% Sensor Parameters
-robot.mine_detector_range = 0.5;    % Mine detector sensing range (m)
-robot.mine_detector_accuracy = 0.95; % Detection accuracy (0-1)
-robot.obstacle_sensor_range = 1.0;  % Obstacle sensor range (m)
-robot.obstacle_sensor_fov = pi/2;   % Field of view (radians)
-robot.num_obstacle_rays = 8;        % Number of obstacle sensor rays
+%% ==================== WORLD/GRID PARAMETERS ====================
+params.world.grid_rows = 20;               % Number of grid rows
+params.world.grid_cols = 20;               % Number of grid columns  
+params.world.cell_size = 1.0;              % Size of each grid cell (m)
+params.world.mine_density = 0.1;           % Mine density (10% of cells)
+params.world.num_obstacles = 10;           % Number of random obstacles
 
-%% Simulation Parameters
-sim.dt = 0.1;                       % Time step (seconds) - keep small for quality
-sim.max_time = 300;                 % Maximum simulation time (seconds)
-sim.grid_size = [10, 10];           % Grid dimensions [rows, cols]
-sim.cell_size = 1.0;                % Size of each grid cell (m)
-sim.mine_density = 0.15;            % Mine density (15% of cells)
-sim.num_obstacles = 5;              % Number of random obstacles
+%% ==================== SIMULATION PARAMETERS ====================
+params.sim.dt = 0.005;                     % Time step (seconds)
+params.sim.max_time = 1000;                % Maximum simulation time (seconds)
+params.sim.speed_multiplier = 5;           % Visualization speed (skip frames)
 
-%% Visualization Parameters
-viz.update_rate = 20;               % Visualization update rate (Hz) - INCREASED
-viz.show_path = true;               % Show robot path trail
-viz.show_sensor_range = true;       % Show sensor detection range
-viz.figure_size = [800, 800];       % Figure window size [width, height]
+%% ==================== LIDAR PARAMETERS ====================
+params.lidar.range = 1.0;                  % Lidar detection range (meters)
+params.lidar.angle_resolution = 5;         % Angular resolution (degrees)
+params.lidar.angles = 0:5:359;             % Scan angles (360 degree scan)
+params.lidar.noise = 0.1;                  % Point cloud noise amplitude
 
-%% ROS2 Parameters
-ros2.domain_id = 0;                 % ROS2 domain ID
-ros2.node_name = 'minesweeper_matlab';
-ros2.qos_depth = 10;                % QoS history depth
+%% ==================== MINE DETECTOR PARAMETERS ====================
+params.mine_detector.range = 0.0;          % Detection range (0 = current cell only)
+params.mine_detector.accuracy = 1.0;       % Detection accuracy (1.0 = perfect)
 
-%% Topic Names
-ros2.topics.pose = '/robot/pose';
-ros2.topics.cmd_vel = '/robot/cmd_vel';
-ros2.topics.mine_detector = '/sensor/mine_detector';
-ros2.topics.obstacles = '/sensor/obstacles';
-ros2.topics.mine_marked = '/robot/mine_marked';
-ros2.topics.simulation_status = '/simulation/status';
+%% ==================== PATH PLANNING PARAMETERS ====================
+params.planning.algorithm = 'coverage';    % 'coverage' or 'astar'
+params.planning.goal_tolerance = 0.15;     % Distance to reach waypoint (m)
+params.planning.safety_margin = 0.3;       % Safety margin around obstacles (m)
 
-%% Path Planning Parameters
-path.algorithm = 'boustrophedon';   % 'boustrophedon' or 'spiral'
-path.safety_margin = 0.3;           % Safety margin around mines (m)
-path.replanning_enabled = true;     % Enable dynamic replanning
+%% ==================== VISUALIZATION PARAMETERS ====================
+params.viz.figure_size = [1400, 700];      % Figure size [width, height]
+params.viz.robot_size = 20;                % Robot marker size
+params.viz.trail_width = 1.5;              % Trail line width
+params.viz.path_width = 3;                 % Optimal path line width
+params.viz.lidar_point_size = 4;           % Lidar point cloud dot size
 
-%% Controller Parameters
-ctrl.kp_linear = 1.0;               % Proportional gain for linear velocity
-ctrl.kp_angular = 2.0;              % Proportional gain for angular velocity
-ctrl.goal_tolerance = 0.1;          % Distance tolerance to reach goal (m)
-ctrl.angle_tolerance = 0.1;         % Angle tolerance (radians)
+%% ==================== ROS2 PARAMETERS ====================
+params.ros2.enabled = true;                % Enable ROS2 communication
+params.ros2.domain_id = 0;                 % ROS2 domain ID
+params.ros2.node_name = 'minesweeper_matlab';
 
-disp('Robot parameters loaded successfully.');
+% Topic names
+params.ros2.topics.pose = '/robot/pose';
+params.ros2.topics.cmd_vel = '/cmd_vel';
+params.ros2.topics.mine_alert = '/mine_alert';
+params.ros2.topics.scan = '/scan';
+params.ros2.topics.map = '/map';
+
+%% ==================== FSM/STATEFLOW PARAMETERS ====================
+params.fsm.detect_delay = 0.2;             % Delay after detection (seconds)
+params.fsm.mark_delay = 0.5;               % Delay for marking hazard (seconds)
+params.fsm.replan_delay = 0.3;             % Delay for replanning (seconds)
+
+end

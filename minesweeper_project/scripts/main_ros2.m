@@ -157,7 +157,7 @@ xlim([0, gridCols*cellSize]);
 ylim([0, gridRows*cellSize]);
 set(ax2, 'Color', [0.1 0.1 0.1], 'XColor', 'w', 'YColor', 'w');
 xlabel('X (m)', 'Color', 'w'); ylabel('Y (m)', 'Color', 'w');
-title('SLAM MAP (Robot''s Knowledge)', 'Color', 'y', 'FontSize', 12);
+title('SLAM MAP (Lidar + Mine Detector)', 'Color', 'y', 'FontSize', 12);
 
 % Draw grid lines (lighter for unexplored)
 for i = 0:gridCols
@@ -167,9 +167,15 @@ for i = 0:gridRows
     plot([0 gridCols]*cellSize, [i i]*cellSize, 'Color', [0.3 0.3 0.3]);
 end
 
-% Discovered obstacles (will update dynamically)
-hSlamObstacles = plot(NaN, NaN, 's', 'MarkerSize', 25, 'MarkerFaceColor', [0.7 0.3 0.3], ...
-                     'MarkerEdgeColor', 'r', 'LineWidth', 2);
+% Explored area (lidar scanned) - dim cells
+hExploredArea = plot(NaN, NaN, 's', 'MarkerSize', 12, 'MarkerFaceColor', [0.15 0.2 0.15], ...
+                    'MarkerEdgeColor', 'none');
+
+% Lidar point cloud (blue dots like MathWorks image)
+hLidarHits = plot(NaN, NaN, 'b.', 'MarkerSize', 4);  % Blue dots for obstacle edges
+
+% Discovered obstacles (magenta outline like image)
+hSlamObstacles = plot(NaN, NaN, 'm.', 'MarkerSize', 8);  % Magenta for known obstacles
 
 % Discovered mines
 hSlamMines = plot(NaN, NaN, 'go', 'MarkerSize', 30, 'LineWidth', 4);
@@ -179,8 +185,8 @@ hRobot2 = plot(robotPos(1), robotPos(2), 'bo', 'MarkerSize', 20, ...
              'MarkerFaceColor', [0.2 0.6 1], 'LineWidth', 2);
 hTrail2 = plot(NaN, NaN, 'c-', 'LineWidth', 1.5);
 
-% Explored area visualization
-hExplored = plot(NaN, NaN, 'g.', 'MarkerSize', 8);
+% Explored cells dots
+hExplored = plot(NaN, NaN, 'g.', 'MarkerSize', 6);
 
 % OPTIMAL PATH on SLAM map
 if ~isempty(initialPath)
@@ -206,6 +212,9 @@ hStatus = uicontrol('Style', 'text', 'Position', [10 10 1380 40], ...
 
 % Track explored cells
 exploredCells = false(gridRows, gridCols);
+
+% Accumulate ALL lidar point cloud hits 
+allLidarPoints = [];  % Will store [x, y] of all lidar hits
 
 fprintf('================================================\n');
 fprintf('  STARTING SIMULATION - Dynamic Path Planning\n');
@@ -258,24 +267,64 @@ while time < maxTime && isvalid(fig)
         nextGridR = max(1, min(gridRows, floor(nextY/cellSize) + 1));
         nextGridC = max(1, min(gridCols, floor(nextX/cellSize) + 1));
         
-        % SENSOR-BASED DISCOVERY: Detect obstacles within sensor range
+        % ===== LIDAR SIMULATION =====
+        % Realistic lidar with ray casting
         obstacleDiscovered = false;
         mineDiscovered = false;
-        sensorRange = 1;  % Robot can see 1 cell ahead only
+        
+        lidarRange = 3.0;           % Lidar range in meters
+        lidarAngles = 0:5:359;      % 360-degree scan, 5-degree resolution for better point cloud
+        numRays = length(lidarAngles);
         
         currentGridR = max(1, min(gridRows, floor(robotPos(2)/cellSize) + 1));
         currentGridC = max(1, min(gridCols, floor(robotPos(1)/cellSize) + 1));
         
-        % Scan all cells within sensor range
-        for scanR = max(1, currentGridR-sensorRange):min(gridRows, currentGridR+sensorRange)
-            for scanC = max(1, currentGridC-sensorRange):min(gridCols, currentGridC+sensorRange)
-                % Discover obstacles
-                if obstacleMap(scanR, scanC) && ~knownObstacles(scanR, scanC)
-                    knownObstacles(scanR, scanC) = true;
-                    obstacleDiscovered = true;
-                    fprintf('[%.1fs] SENSOR: Obstacle at (%d,%d) - REPLANNING!\n', time, scanR, scanC);
+        % ===== MINE DETECTOR - Only checks current cell =====
+        if mineMap(currentGridR, currentGridC) && ~knownMines(currentGridR, currentGridC)
+            knownMines(currentGridR, currentGridC) = true;
+            mineDiscovered = true;
+            markedMap(currentGridR, currentGridC) = true;
+            minesFound = minesFound + 1;
+            fprintf('[%.1fs] MINE DETECTOR: Mine at (%d,%d) - %d/%d\n', ...
+                   time, currentGridR, currentGridC, minesFound, numMines);
+        end
+        
+        % ===== LIDAR - Ray casting for point cloud =====
+        % Cast rays in all directions and collect hit points
+        lidarHits = [];  % Initialize empty array for this scan
+        for rayIdx = 1:numRays
+            angle = deg2rad(lidarAngles(rayIdx));
+            
+            % Ray march along this angle
+            for dist = 0.1:0.15:lidarRange
+                rayX = robotPos(1) + dist * cos(angle);
+                rayY = robotPos(2) + dist * sin(angle);
+                
+                % Convert to grid
+                rayGridR = max(1, min(gridRows, floor(rayY/cellSize) + 1));
+                rayGridC = max(1, min(gridCols, floor(rayX/cellSize) + 1));
+                
+                % Mark cell as explored (lidar saw it)
+                exploredCells(rayGridR, rayGridC) = true;
+                
+                % Check for obstacle hit - record point cloud
+                if obstacleMap(rayGridR, rayGridC)
+                    % Lidar hit obstacle - add to point cloud with noise
+                    hitX = rayX + (rand()-0.5)*0.1;  % Add noise for realistic scatter
+                    hitY = rayY + (rand()-0.5)*0.1;
+                    lidarHits(end+1, :) = [hitX, hitY];
+                    
+                    if ~knownObstacles(rayGridR, rayGridC)
+                        knownObstacles(rayGridR, rayGridC) = true;
+                        obstacleDiscovered = true;
+                    end
+                    break;  % Ray stops at obstacle
                 end
             end
+        end
+        
+        if obstacleDiscovered
+            fprintf('[%.1fs] LIDAR: New obstacles detected - REPLANNING!\n', time);
         end
         
         % Only move if NOT hitting an obstacle
@@ -356,7 +405,25 @@ while time < maxTime && isvalid(fig)
     set(hRobot2, 'XData', robotPos(1), 'YData', robotPos(2));
     set(hTrail2, 'XData', trail(:,1), 'YData', trail(:,2));
     
-    % Show discovered obstacles on SLAM map
+    % Accumulate lidar point cloud hits (like MathWorks image)
+    if ~isempty(lidarHits)
+        allLidarPoints = [allLidarPoints; lidarHits];
+    end
+    
+    % Show lidar point cloud (blue dots showing obstacle edges)
+    if ~isempty(allLidarPoints)
+        set(hLidarHits, 'XData', allLidarPoints(:,1), 'YData', allLidarPoints(:,2));
+    end
+    
+    % Show explored area on SLAM map (cells lidar has seen - dim)
+    [expR, expC] = find(exploredCells & ~knownObstacles);
+    if ~isempty(expR)
+        expX = (expC - 0.5) * cellSize;
+        expY = (expR - 0.5) * cellSize;
+        set(hExplored, 'XData', expX, 'YData', expY);
+    end
+    
+    % Show discovered obstacles on SLAM map (from point cloud)
     [obsR, obsC] = find(knownObstacles);
     if ~isempty(obsR)
         obsX = (obsC - 0.5) * cellSize;
@@ -364,7 +431,7 @@ while time < maxTime && isvalid(fig)
         set(hSlamObstacles, 'XData', obsX, 'YData', obsY);
     end
     
-    % Show detected mines on SLAM map
+    % Show detected mines on SLAM map (green circles)
     [mineR, mineC] = find(knownMines);
     if ~isempty(mineR)
         mineX = (mineC - 0.5) * cellSize;

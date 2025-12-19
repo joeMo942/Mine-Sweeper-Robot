@@ -18,11 +18,12 @@ This project simulates a robot that:
 ## 📁 Project Structure
 
 ```
-minesweeper_project/
-├── README.md                      # This file
+minesweeper_ros2/
+├── main_ros2.m                    # ★ Main simulation entry point
 ├── setup_project.m                # Project setup script
+├── README.md                      # This file
 ├── config/
-│   └── robot_params.m             # Robot and simulation parameters
+│   └── robot_params.m             # All configuration parameters
 ├── docs/
 │   ├── ARCHITECTURE.md            # Technical architecture docs
 │   ├── architecture_diagram.png   # System architecture image
@@ -30,7 +31,6 @@ minesweeper_project/
 ├── models/
 │   └── minesweeper_stateflow.slx  # Simulink/Stateflow FSM model
 ├── scripts/
-│   ├── main_ros2.m                # ★ Main simulation entry point
 │   ├── buildStateflowModel.m      # Programmatic Stateflow builder
 │   ├── core/                      # Core classes
 │   │   ├── OccupancyGridWorld.m   # Occupancy grid map
@@ -58,7 +58,6 @@ The project follows a **6-step modular architecture**:
 ![Architecture Diagram](docs/architecture_diagram.png)
 
 
-
 ### Module Descriptions
 
 | Step | Module | Description |
@@ -77,7 +76,6 @@ The robot behavior is controlled by a Stateflow FSM with 6 states:
 ![Stateflow Diagram](docs/stateflow_diagram.png)
 
 
-
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -91,16 +89,20 @@ The robot behavior is controlled by a Stateflow FSM with 6 states:
 
 1. **Open MATLAB** and navigate to the project folder:
    ```matlab
-   cd('c:\Users\yousef\mapping\minesweeper_project')
-   addpath(genpath(pwd))
+   cd('c:\Users\yousef\mapping')
    ```
 
-2. **Run the main simulation**:
+2. **Setup project** (first time only):
+   ```matlab
+   setup_project
+   ```
+
+3. **Run the main simulation**:
    ```matlab
    main_ros2
    ```
 
-3. **Build the Stateflow model** (optional):
+4. **Build the Stateflow model** (optional):
    ```matlab
    buildStateflowModel('minesweeper_stateflow')
    ```

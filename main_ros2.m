@@ -14,8 +14,8 @@ fprintf('  MINESWEEPER ROBOT - ROS2 SIMULATION WITH SLAM\n');
 fprintf('================================================\n\n');
 
 %% Load Configuration from robot_params.m
-thisDir = fileparts(mfilename('fullpath'));
-addpath(genpath(fullfile(thisDir, '..')));  % Add all project folders
+projectRoot = fileparts(mfilename('fullpath'));
+addpath(genpath(projectRoot));  % Add all project folders
 
 fprintf('Loading configuration...\n');
 params = robot_params();  % Load all parameters from config file

@@ -87,25 +87,13 @@ robotPos = [0.5, 0.5];  % Start position
 robotHeading = 0;
 robotVel = robot.max_velocity;
 
-%% Step 4: Generate Path (boustrophedon - avoid obstacles)
-path = [];
-direction = 1;
-for row = 1:gridRows
-    if direction == 1
-        cols = 1:gridCols;
-    else
-        cols = gridCols:-1:1;
-    end
-    for col = cols
-        % Skip obstacle cells
-        if ~obstacleMap(row, col)
-            path(end+1,:) = [(col-0.5)*cellSize, (row-0.5)*cellSize];
-        end
-    end
-    direction = -direction;
-end
+%% Step 4: Generate Coverage Path (BFS - explore all cells, avoid obstacles)
+% Uses BFS to visit ALL accessible cells while navigating around obstacles
+
+% Generate coverage path that explores all cells
+path = generateCoveragePath(gridRows, gridCols, cellSize, obstacleMap, startPos);
 waypointIdx = 1;
-fprintf('Path: %d waypoints (avoiding %d obstacles)\n\n', size(path,1), numObstacles);
+fprintf('Path: %d waypoints covering all accessible cells\n\n', size(path,1));
 
 %% Step 5: Create Fast Visualization
 fig = figure('Name', 'Minesweeper ROS2 (Fast)', 'NumberTitle', 'off', ...
@@ -205,9 +193,22 @@ while time < maxTime && isvalid(fig)
             v = min(robotVel, dist * 2);
         end
         
-        % Update position
-        robotPos(1) = robotPos(1) + v * cos(robotHeading) * dt;
-        robotPos(2) = robotPos(2) + v * sin(robotHeading) * dt;
+        % Calculate next position
+        nextX = robotPos(1) + v * cos(robotHeading) * dt;
+        nextY = robotPos(2) + v * sin(robotHeading) * dt;
+        
+        % Check if next position is in an obstacle
+        nextGridR = max(1, min(gridRows, floor(nextY/cellSize) + 1));
+        nextGridC = max(1, min(gridCols, floor(nextX/cellSize) + 1));
+        
+        % Only move if NOT hitting an obstacle
+        if ~obstacleMap(nextGridR, nextGridC)
+            robotPos(1) = nextX;
+            robotPos(2) = nextY;
+        else
+            % Hit obstacle - skip to next waypoint
+            waypointIdx = waypointIdx + 1;
+        end
         robotHeading = wrapToPi(robotHeading);
         
         % Check for mine
@@ -434,5 +435,107 @@ function path = reconstructPath(cameFrom, current)
             break;
         end
         path = [current; path];
+    end
+end
+
+function path = generateCoveragePath(rows, cols, cellSize, obstacleMap, startPos)
+    % Generate a path that visits ALL accessible cells using A* pathfinding
+    % Uses A* to navigate between unvisited cells
+    
+    visited = false(rows, cols);
+    path = [];
+    
+    % Mark obstacles as visited (can't go there)
+    visited = visited | obstacleMap;
+    
+    % Start position
+    currentCell = startPos;
+    visited(currentCell(1), currentCell(2)) = true;
+    path(end+1,:) = [(currentCell(2)-0.5)*cellSize, (currentCell(1)-0.5)*cellSize];
+    
+    % Keep exploring until all cells visited
+    while true
+        % Find nearest unvisited cell using A*
+        [nearestCell, pathToCell] = findNearestUnvisited(currentCell, visited, obstacleMap, rows, cols);
+        
+        if isempty(nearestCell)
+            break;  % All cells visited
+        end
+        
+        % Add A* path to the exploration path
+        for i = 2:size(pathToCell, 1)
+            cell = pathToCell(i,:);
+            path(end+1,:) = [(cell(2)-0.5)*cellSize, (cell(1)-0.5)*cellSize];
+            visited(cell(1), cell(2)) = true;
+        end
+        
+        currentCell = nearestCell;
+    end
+end
+
+function [nearest, pathTo] = findNearestUnvisited(start, visited, obstacleMap, rows, cols)
+    % A* search to find path to nearest unvisited cell
+    
+    nearest = [];
+    pathTo = [];
+    
+    % Check if all visited
+    if all(visited(:))
+        return;
+    end
+    
+    % A* setup
+    openList = start;
+    gScore = inf(rows, cols);
+    gScore(start(1), start(2)) = 0;
+    cameFrom = zeros(rows, cols, 2);
+    
+    directions = [-1 0; 1 0; 0 -1; 0 1];  % 4 directions
+    
+    while ~isempty(openList)
+        % Get node with lowest gScore (BFS-like for nearest)
+        [~, idx] = min(arrayfun(@(i) gScore(openList(i,1), openList(i,2)), 1:size(openList,1)));
+        current = openList(idx,:);
+        openList(idx,:) = [];
+        
+        % Check if this is an unvisited cell (not start)
+        if ~isequal(current, start) && ~visited(current(1), current(2))
+            nearest = current;
+            pathTo = reconstructAStarPath(cameFrom, current, start);
+            return;
+        end
+        
+        % Explore neighbors
+        for d = 1:4
+            neighbor = current + directions(d,:);
+            
+            if neighbor(1) >= 1 && neighbor(1) <= rows && ...
+               neighbor(2) >= 1 && neighbor(2) <= cols && ...
+               ~obstacleMap(neighbor(1), neighbor(2))
+                
+                tentativeG = gScore(current(1), current(2)) + 1;
+                
+                if tentativeG < gScore(neighbor(1), neighbor(2))
+                    cameFrom(neighbor(1), neighbor(2), :) = current;
+                    gScore(neighbor(1), neighbor(2)) = tentativeG;
+                    
+                    if ~any(all(openList == neighbor, 2))
+                        openList(end+1,:) = neighbor;
+                    end
+                end
+            end
+        end
+    end
+end
+
+function path = reconstructAStarPath(cameFrom, current, start)
+    path = current;
+    while ~isequal(current, start)
+        prev = squeeze(cameFrom(current(1), current(2), :))';
+        if all(prev == 0)
+            break;
+        end
+        path = [prev; path];
+        current = prev;
     end
 end

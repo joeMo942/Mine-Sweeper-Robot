@@ -2,8 +2,8 @@
 % Minesweeper Robot Project with MATLAB Simulink and ROS2
 
 %% Robot Physical Parameters
-robot.max_velocity = 0.5;           % Maximum linear velocity (m/s)
-robot.max_angular_velocity = 1.0;   % Maximum angular velocity (rad/s)
+robot.max_velocity = 2.0;           % Maximum linear velocity (m/s) - INCREASED for faster sim
+robot.max_angular_velocity = 3.0;   % Maximum angular velocity (rad/s) - INCREASED
 robot.width = 0.3;                  % Robot width (m)
 robot.length = 0.4;                 % Robot length (m)
 robot.wheelbase = 0.25;             % Distance between wheels (m)
@@ -16,7 +16,7 @@ robot.obstacle_sensor_fov = pi/2;   % Field of view (radians)
 robot.num_obstacle_rays = 8;        % Number of obstacle sensor rays
 
 %% Simulation Parameters
-sim.dt = 0.1;                       % Time step (seconds)
+sim.dt = 0.1;                       % Time step (seconds) - keep small for quality
 sim.max_time = 300;                 % Maximum simulation time (seconds)
 sim.grid_size = [10, 10];           % Grid dimensions [rows, cols]
 sim.cell_size = 1.0;                % Size of each grid cell (m)
@@ -24,7 +24,7 @@ sim.mine_density = 0.15;            % Mine density (15% of cells)
 sim.num_obstacles = 5;              % Number of random obstacles
 
 %% Visualization Parameters
-viz.update_rate = 10;               % Visualization update rate (Hz)
+viz.update_rate = 20;               % Visualization update rate (Hz) - INCREASED
 viz.show_path = true;               % Show robot path trail
 viz.show_sensor_range = true;       % Show sensor detection range
 viz.figure_size = [800, 800];       % Figure window size [width, height]

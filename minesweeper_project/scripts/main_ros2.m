@@ -82,20 +82,32 @@ catch
     fprintf('ROS2 not available - running in simulation mode.\n\n');
 end
 
-%% Step 3: Initialize Robot
+%% Step 4: Path Planning with Discovery
+% Robot starts with NO knowledge of obstacles/mines
+% As it explores, it discovers them and REPLANS the path
+
+% Known obstacles/mines map (initially empty - robot doesn't know yet)
+knownObstacles = false(gridRows, gridCols);
+knownMines = false(gridRows, gridCols);
+
+% Calculate INITIAL optimal path (assuming empty grid - no obstacles known yet)
+fprintf('Computing initial optimal path (empty grid)...\n');
+emptyMap = false(gridRows, gridCols);
+initialPath = findShortestPath(emptyMap, startPos, endPos);
+fprintf('Initial path length: %d steps (no obstacles known)\n', size(initialPath, 1));
+
+% Generate coverage path using ACTUAL obstacle map (robot has sensors to detect obstacles)
+% Robot will visit all accessible cells, avoiding real obstacles
+path = generateCoveragePath(gridRows, gridCols, cellSize, obstacleMap, startPos);
+waypointIdx = 1;
+fprintf('Coverage path: %d waypoints (exploring all cells)\n\n', size(path,1));
+
+%% Step 5: Initialize Robot
 robotPos = [0.5, 0.5];  % Start position
 robotHeading = 0;
 robotVel = robot.max_velocity;
 
-%% Step 4: Generate Coverage Path (BFS - explore all cells, avoid obstacles)
-% Uses BFS to visit ALL accessible cells while navigating around obstacles
-
-% Generate coverage path that explores all cells
-path = generateCoveragePath(gridRows, gridCols, cellSize, obstacleMap, startPos);
-waypointIdx = 1;
-fprintf('Path: %d waypoints covering all accessible cells\n\n', size(path,1));
-
-%% Step 5: Create Fast Visualization
+%% Step 6: Create Fast Visualization
 fig = figure('Name', 'Minesweeper ROS2 (Fast)', 'NumberTitle', 'off', ...
             'Position', [100 100 900 750], 'Color', [0.15 0.15 0.15]);
 
@@ -141,9 +153,18 @@ hTrail = plot(NaN, NaN, 'c-', 'LineWidth', 1.5, 'DisplayName', 'Trail');
 % Handle for detected mines - GREEN CIRCLES
 hDetectedMines = plot(NaN, NaN, 'go', 'MarkerSize', 30, 'LineWidth', 4, 'DisplayName', 'Detected');
 
-title('MINESWEEPER ROS2 SIMULATION', 'Color', 'w', 'FontSize', 14);
-legend([hRobot, hMinesVisible, hObstacles, hDetectedMines], ...
-       {'Robot', 'Mines', 'Obstacles', 'Detected'}, ...
+% OPTIMAL PATH (yellow - updates continuously while robot moves)
+if ~isempty(initialPath)
+    initPathX = (initialPath(:,2) - 0.5) * cellSize;
+    initPathY = (initialPath(:,1) - 0.5) * cellSize;
+    hOptimalPath = plot(initPathX, initPathY, 'y-', 'LineWidth', 3, 'DisplayName', 'Optimal Path');
+else
+    hOptimalPath = plot(NaN, NaN, 'y-', 'LineWidth', 3, 'DisplayName', 'Optimal Path');
+end
+
+title('MINESWEEPER ROS2 - Dynamic Path Planning', 'Color', 'w', 'FontSize', 14);
+legend([hRobot, hMinesVisible, hObstacles, hDetectedMines, hOptimalPath], ...
+       {'Robot', 'Mines', 'Obstacles', 'Detected', 'Optimal Path (live)'}, ...
        'Location', 'northeast', 'TextColor', 'w', 'Color', [0.2 0.2 0.2]);
 
 % Status text
@@ -152,7 +173,8 @@ hStatus = uicontrol('Style', 'text', 'Position', [10 10 880 40], ...
     'FontSize', 12, 'HorizontalAlignment', 'left');
 
 fprintf('================================================\n');
-fprintf('  STARTING SIMULATION (Press Ctrl+C to stop)\n');
+fprintf('  STARTING SIMULATION - Dynamic Path Planning\n');
+fprintf('  Yellow = Initial plan | Magenta = Current plan\n');
 fprintf('================================================\n\n');
 
 %% Main Loop
@@ -201,6 +223,26 @@ while time < maxTime && isvalid(fig)
         nextGridR = max(1, min(gridRows, floor(nextY/cellSize) + 1));
         nextGridC = max(1, min(gridCols, floor(nextX/cellSize) + 1));
         
+        % SENSOR-BASED DISCOVERY: Detect obstacles within sensor range
+        obstacleDiscovered = false;
+        mineDiscovered = false;
+        sensorRange = 1;  % Robot can see 1 cell ahead only
+        
+        currentGridR = max(1, min(gridRows, floor(robotPos(2)/cellSize) + 1));
+        currentGridC = max(1, min(gridCols, floor(robotPos(1)/cellSize) + 1));
+        
+        % Scan all cells within sensor range
+        for scanR = max(1, currentGridR-sensorRange):min(gridRows, currentGridR+sensorRange)
+            for scanC = max(1, currentGridC-sensorRange):min(gridCols, currentGridC+sensorRange)
+                % Discover obstacles
+                if obstacleMap(scanR, scanC) && ~knownObstacles(scanR, scanC)
+                    knownObstacles(scanR, scanC) = true;
+                    obstacleDiscovered = true;
+                    fprintf('[%.1fs] SENSOR: Obstacle at (%d,%d) - REPLANNING!\n', time, scanR, scanC);
+                end
+            end
+        end
+        
         % Only move if NOT hitting an obstacle
         if ~obstacleMap(nextGridR, nextGridC)
             robotPos(1) = nextX;
@@ -220,9 +262,27 @@ while time < maxTime && isvalid(fig)
             mineAlert = true;
             detectedMap(gridR, gridC) = true;
             markedMap(gridR, gridC) = true;
+            knownMines(gridR, gridC) = true;  % Add to known map
             minesFound = minesFound + 1;
-            fprintf('[%.1fs] MINE at grid (%d,%d) - Total: %d/%d\n', ...
+            mineDiscovered = true;
+            fprintf('[%.1fs] MINE at (%d,%d) - Total: %d/%d - REPLANNING!\n', ...
                    time, gridR, gridC, minesFound, numMines);
+        end
+        
+        % REPLAN PATH if obstacle or mine discovered
+        if obstacleDiscovered || mineDiscovered
+            combinedKnown = knownObstacles | knownMines;
+            newOptimalPath = findShortestPath(combinedKnown, startPos, endPos);
+            
+            % Update optimal path display (LIVE UPDATE)
+            if ~isempty(newOptimalPath)
+                newPathX = (newOptimalPath(:,2) - 0.5) * cellSize;
+                newPathY = (newOptimalPath(:,1) - 0.5) * cellSize;
+                set(hOptimalPath, 'XData', newPathX, 'YData', newPathY);
+            else
+                % No path exists - show message
+                set(hOptimalPath, 'XData', NaN, 'YData', NaN);
+            end
         end
         
         % Publish ROS2

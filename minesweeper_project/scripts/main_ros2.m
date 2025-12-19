@@ -107,18 +107,19 @@ robotPos = [0.5, 0.5];  % Start position
 robotHeading = 0;
 robotVel = robot.max_velocity;
 
-%% Step 6: Create Fast Visualization
-fig = figure('Name', 'Minesweeper ROS2 (Fast)', 'NumberTitle', 'off', ...
-            'Position', [100 100 900 750], 'Color', [0.15 0.15 0.15]);
+%% Step 6: Create DUAL Visualization (Original + SLAM Map)
+fig = figure('Name', 'Minesweeper ROS2 - Original vs SLAM', 'NumberTitle', 'off', ...
+            'Position', [50 50 1400 700], 'Color', [0.15 0.15 0.15]);
 
-% Draw initial grid
-ax = axes('Position', [0.1 0.12 0.8 0.78]);
+% ==================== LEFT PANEL: ORIGINAL WORLD MAP ====================
+ax1 = subplot(1, 2, 1);
 hold on;
 axis equal;
 xlim([0, gridCols*cellSize]);
 ylim([0, gridRows*cellSize]);
-set(ax, 'Color', [0.2 0.2 0.2], 'XColor', 'w', 'YColor', 'w');
+set(ax1, 'Color', [0.2 0.2 0.2], 'XColor', 'w', 'YColor', 'w');
 xlabel('X (m)', 'Color', 'w'); ylabel('Y (m)', 'Color', 'w');
+title('ORIGINAL WORLD (Ground Truth)', 'Color', 'w', 'FontSize', 12);
 
 % Draw grid lines
 for i = 0:gridCols
@@ -128,7 +129,7 @@ for i = 0:gridRows
     plot([0 gridCols]*cellSize, [i i]*cellSize, 'Color', [0.4 0.4 0.4]);
 end
 
-% ===== OBSTACLES - Gray filled squares =====
+% OBSTACLES - Gray filled squares
 [obsRows, obsCols] = find(obstacleMap);
 for i = 1:length(obsRows)
     ox = (obsCols(i) - 1) * cellSize;
@@ -136,41 +137,75 @@ for i = 1:length(obsRows)
     rectangle('Position', [ox+0.05, oy+0.05, cellSize-0.1, cellSize-0.1], ...
              'FaceColor', [0.5 0.5 0.5], 'EdgeColor', [0.3 0.3 0.3], 'LineWidth', 2);
 end
-hObstacles = plot(NaN, NaN, 's', 'MarkerSize', 15, 'MarkerFaceColor', [0.5 0.5 0.5], ...
-                 'MarkerEdgeColor', 'k', 'DisplayName', 'Obstacles');
 
-% ===== PRE-DEFINED MINES - Show mines as RED X from the start =====
+% MINES - Red X
 [mineRows, mineCols] = find(mineMap);
 mineWorldX = (mineCols - 0.5) * cellSize;
 mineWorldY = (mineRows - 0.5) * cellSize;
-hMinesVisible = plot(mineWorldX, mineWorldY, 'rx', 'MarkerSize', 15, 'LineWidth', 3, 'DisplayName', 'Mines');
+plot(mineWorldX, mineWorldY, 'rx', 'MarkerSize', 15, 'LineWidth', 3);
 
-% Graphics handles
-hRobot = plot(robotPos(1), robotPos(2), 'bo', 'MarkerSize', 20, ...
-             'MarkerFaceColor', [0.2 0.6 1], 'LineWidth', 2, 'DisplayName', 'Robot');
-hTrail = plot(NaN, NaN, 'c-', 'LineWidth', 1.5, 'DisplayName', 'Trail');
+% Robot on original map
+hRobot1 = plot(robotPos(1), robotPos(2), 'bo', 'MarkerSize', 20, ...
+             'MarkerFaceColor', [0.2 0.6 1], 'LineWidth', 2);
+hTrail1 = plot(NaN, NaN, 'c-', 'LineWidth', 1.5);
 
-% Handle for detected mines - GREEN CIRCLES
-hDetectedMines = plot(NaN, NaN, 'go', 'MarkerSize', 30, 'LineWidth', 4, 'DisplayName', 'Detected');
+% ==================== RIGHT PANEL: SLAM MAP (Robot's Knowledge) ====================
+ax2 = subplot(1, 2, 2);
+hold on;
+axis equal;
+xlim([0, gridCols*cellSize]);
+ylim([0, gridRows*cellSize]);
+set(ax2, 'Color', [0.1 0.1 0.1], 'XColor', 'w', 'YColor', 'w');
+xlabel('X (m)', 'Color', 'w'); ylabel('Y (m)', 'Color', 'w');
+title('SLAM MAP (Robot''s Knowledge)', 'Color', 'y', 'FontSize', 12);
 
-% OPTIMAL PATH (yellow - updates continuously while robot moves)
+% Draw grid lines (lighter for unexplored)
+for i = 0:gridCols
+    plot([i i]*cellSize, [0 gridRows]*cellSize, 'Color', [0.3 0.3 0.3]);
+end
+for i = 0:gridRows
+    plot([0 gridCols]*cellSize, [i i]*cellSize, 'Color', [0.3 0.3 0.3]);
+end
+
+% Discovered obstacles (will update dynamically)
+hSlamObstacles = plot(NaN, NaN, 's', 'MarkerSize', 25, 'MarkerFaceColor', [0.7 0.3 0.3], ...
+                     'MarkerEdgeColor', 'r', 'LineWidth', 2);
+
+% Discovered mines
+hSlamMines = plot(NaN, NaN, 'go', 'MarkerSize', 30, 'LineWidth', 4);
+
+% Robot on SLAM map
+hRobot2 = plot(robotPos(1), robotPos(2), 'bo', 'MarkerSize', 20, ...
+             'MarkerFaceColor', [0.2 0.6 1], 'LineWidth', 2);
+hTrail2 = plot(NaN, NaN, 'c-', 'LineWidth', 1.5);
+
+% Explored area visualization
+hExplored = plot(NaN, NaN, 'g.', 'MarkerSize', 8);
+
+% OPTIMAL PATH on SLAM map
 if ~isempty(initialPath)
     initPathX = (initialPath(:,2) - 0.5) * cellSize;
     initPathY = (initialPath(:,1) - 0.5) * cellSize;
-    hOptimalPath = plot(initPathX, initPathY, 'y-', 'LineWidth', 3, 'DisplayName', 'Optimal Path');
+    hOptimalPath = plot(initPathX, initPathY, 'y-', 'LineWidth', 3);
 else
-    hOptimalPath = plot(NaN, NaN, 'y-', 'LineWidth', 3, 'DisplayName', 'Optimal Path');
+    hOptimalPath = plot(NaN, NaN, 'y-', 'LineWidth', 3);
 end
 
-title('MINESWEEPER ROS2 - Dynamic Path Planning', 'Color', 'w', 'FontSize', 14);
-legend([hRobot, hMinesVisible, hObstacles, hDetectedMines, hOptimalPath], ...
-       {'Robot', 'Mines', 'Obstacles', 'Detected', 'Optimal Path (live)'}, ...
+% Legend for SLAM map
+legend([hRobot2, hSlamObstacles, hSlamMines, hOptimalPath], ...
+       {'Robot', 'Known Obstacles', 'Detected Mines', 'Optimal Path'}, ...
        'Location', 'northeast', 'TextColor', 'w', 'Color', [0.2 0.2 0.2]);
 
+% Store axes handles for use in loop
+ax = ax2;  % Main plotting axis
+
 % Status text
-hStatus = uicontrol('Style', 'text', 'Position', [10 10 880 40], ...
+hStatus = uicontrol('Style', 'text', 'Position', [10 10 1380 40], ...
     'BackgroundColor', [0.15 0.15 0.15], 'ForegroundColor', 'w', ...
     'FontSize', 12, 'HorizontalAlignment', 'left');
+
+% Track explored cells
+exploredCells = false(gridRows, gridCols);
 
 fprintf('================================================\n');
 fprintf('  STARTING SIMULATION - Dynamic Path Planning\n');
@@ -308,16 +343,41 @@ while time < maxTime && isvalid(fig)
         break;
     end
     
-    % Update visualization
-    set(hRobot, 'XData', robotPos(1), 'YData', robotPos(2));
-    set(hTrail, 'XData', trail(:,1), 'YData', trail(:,2));
+    % Update exploration tracking
+    currentGridR = max(1, min(gridRows, floor(robotPos(2)/cellSize) + 1));
+    currentGridC = max(1, min(gridCols, floor(robotPos(1)/cellSize) + 1));
+    exploredCells(currentGridR, currentGridC) = true;
     
-    % Show detected mines as GREEN CIRCLES
-    [mr, mc] = find(markedMap);
-    if ~isempty(mr)
-        detectedX = (mc - 0.5) * cellSize;
-        detectedY = (mr - 0.5) * cellSize;
-        set(hDetectedMines, 'XData', detectedX, 'YData', detectedY);
+    % ===== UPDATE ORIGINAL WORLD MAP (Left Panel) =====
+    set(hRobot1, 'XData', robotPos(1), 'YData', robotPos(2));
+    set(hTrail1, 'XData', trail(:,1), 'YData', trail(:,2));
+    
+    % ===== UPDATE SLAM MAP (Right Panel) =====
+    set(hRobot2, 'XData', robotPos(1), 'YData', robotPos(2));
+    set(hTrail2, 'XData', trail(:,1), 'YData', trail(:,2));
+    
+    % Show discovered obstacles on SLAM map
+    [obsR, obsC] = find(knownObstacles);
+    if ~isempty(obsR)
+        obsX = (obsC - 0.5) * cellSize;
+        obsY = (obsR - 0.5) * cellSize;
+        set(hSlamObstacles, 'XData', obsX, 'YData', obsY);
+    end
+    
+    % Show detected mines on SLAM map
+    [mineR, mineC] = find(knownMines);
+    if ~isempty(mineR)
+        mineX = (mineC - 0.5) * cellSize;
+        mineY = (mineR - 0.5) * cellSize;
+        set(hSlamMines, 'XData', mineX, 'YData', mineY);
+    end
+    
+    % Show explored cells on SLAM map
+    [expR, expC] = find(exploredCells);
+    if ~isempty(expR)
+        expX = (expC - 0.5) * cellSize;
+        expY = (expR - 0.5) * cellSize;
+        set(hExplored, 'XData', expX, 'YData', expY);
     end
     
     % Update status

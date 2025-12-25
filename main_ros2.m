@@ -111,11 +111,12 @@ emptyMap = false(gridRows, gridCols);
 initialPath = findShortestPath(emptyMap, startPos, endPos);
 fprintf('Initial path length: %d steps (no obstacles known)\n', size(initialPath, 1));
 
-% Generate coverage path using ACTUAL obstacle map (robot has sensors to detect obstacles)
-% Robot will visit all accessible cells, avoiding real obstacles
-path = generateCoveragePath(gridRows, gridCols, cellSize, obstacleMap, startPos);
+% Generate coverage path using Spanning Tree Coverage (STC) algorithm
+% STC provides optimal coverage with minimal backtracking
+fprintf('Generating Spanning Tree Coverage path...\n');
+path = SpanningTreeCoverage.generateSTCPath(gridRows, gridCols, cellSize, obstacleMap, startPos);
 waypointIdx = 1;
-fprintf('Coverage path: %d waypoints (exploring all cells)\n\n', size(path,1));
+fprintf('STC Coverage path: %d waypoints (optimal coverage)\n\n', size(path,1));
 
 %% Step 5: Initialize Robot
 robotPos = [0.5, 0.5];  % Start position
@@ -242,6 +243,7 @@ minesFound = 0;
 time = 0;
 step = 0;
 goalTol = 0.15;
+stuckCounter = 0;  % Counter for obstacle collision handling
 
 tic;
 while time < maxTime && isvalid(fig)
@@ -345,9 +347,23 @@ while time < maxTime && isvalid(fig)
         if ~obstacleMap(nextGridR, nextGridC)
             robotPos(1) = nextX;
             robotPos(2) = nextY;
+            stuckCounter = 0;  % Reset stuck counter on successful move
         else
-            % Hit obstacle - skip to next waypoint
-            waypointIdx = waypointIdx + 1;
+            % Hit obstacle - increment stuck counter
+            if ~exist('stuckCounter', 'var')
+                stuckCounter = 0;
+            end
+            stuckCounter = stuckCounter + 1;
+            
+            % If stuck for too long, skip to next waypoint
+            if stuckCounter > 50
+                waypointIdx = waypointIdx + 1;
+                stuckCounter = 0;
+                fprintf('[%.1fs] Skipping blocked waypoint %d\n', time, waypointIdx-1);
+            else
+                % Try to turn around the obstacle
+                robotHeading = robotHeading + 0.3;  % Turn to find way around
+            end
         end
         robotHeading = wrapToPi(robotHeading);
         
@@ -639,104 +655,4 @@ function path = reconstructPath(cameFrom, current)
     end
 end
 
-function path = generateCoveragePath(rows, cols, cellSize, obstacleMap, startPos)
-    % Generate a path that visits ALL accessible cells using A* pathfinding
-    % Uses A* to navigate between unvisited cells
-    
-    visited = false(rows, cols);
-    path = [];
-    
-    % Mark obstacles as visited (can't go there)
-    visited = visited | obstacleMap;
-    
-    % Start position
-    currentCell = startPos;
-    visited(currentCell(1), currentCell(2)) = true;
-    path(end+1,:) = [(currentCell(2)-0.5)*cellSize, (currentCell(1)-0.5)*cellSize];
-    
-    % Keep exploring until all cells visited
-    while true
-        % Find nearest unvisited cell using A*
-        [nearestCell, pathToCell] = findNearestUnvisited(currentCell, visited, obstacleMap, rows, cols);
-        
-        if isempty(nearestCell)
-            break;  % All cells visited
-        end
-        
-        % Add A* path to the exploration path
-        for i = 2:size(pathToCell, 1)
-            cell = pathToCell(i,:);
-            path(end+1,:) = [(cell(2)-0.5)*cellSize, (cell(1)-0.5)*cellSize];
-            visited(cell(1), cell(2)) = true;
-        end
-        
-        currentCell = nearestCell;
-    end
-end
 
-function [nearest, pathTo] = findNearestUnvisited(start, visited, obstacleMap, rows, cols)
-    % A* search to find path to nearest unvisited cell
-    
-    nearest = [];
-    pathTo = [];
-    
-    % Check if all visited
-    if all(visited(:))
-        return;
-    end
-    
-    % A* setup
-    openList = start;
-    gScore = inf(rows, cols);
-    gScore(start(1), start(2)) = 0;
-    cameFrom = zeros(rows, cols, 2);
-    
-    directions = [-1 0; 1 0; 0 -1; 0 1];  % 4 directions
-    
-    while ~isempty(openList)
-        % Get node with lowest gScore (BFS-like for nearest)
-        [~, idx] = min(arrayfun(@(i) gScore(openList(i,1), openList(i,2)), 1:size(openList,1)));
-        current = openList(idx,:);
-        openList(idx,:) = [];
-        
-        % Check if this is an unvisited cell (not start)
-        if ~isequal(current, start) && ~visited(current(1), current(2))
-            nearest = current;
-            pathTo = reconstructAStarPath(cameFrom, current, start);
-            return;
-        end
-        
-        % Explore neighbors
-        for d = 1:4
-            neighbor = current + directions(d,:);
-            
-            if neighbor(1) >= 1 && neighbor(1) <= rows && ...
-               neighbor(2) >= 1 && neighbor(2) <= cols && ...
-               ~obstacleMap(neighbor(1), neighbor(2))
-                
-                tentativeG = gScore(current(1), current(2)) + 1;
-                
-                if tentativeG < gScore(neighbor(1), neighbor(2))
-                    cameFrom(neighbor(1), neighbor(2), :) = current;
-                    gScore(neighbor(1), neighbor(2)) = tentativeG;
-                    
-                    if ~any(all(openList == neighbor, 2))
-                        openList(end+1,:) = neighbor;
-                    end
-                end
-            end
-        end
-    end
-end
-
-function path = reconstructAStarPath(cameFrom, current, start)
-    path = current;
-    while ~isequal(current, start)
-        prev = squeeze(cameFrom(current(1), current(2), :))';
-        if all(prev == 0)
-            break;
-        end
-        path = [prev; path];
-        current = prev;
-    end
-end

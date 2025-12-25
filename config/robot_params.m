@@ -18,11 +18,11 @@ params.robot.length = 0.4;                 % Robot length (m)
 params.robot.start_position = [0.5, 0.5];  % Starting position [x, y] in meters
 
 %% ==================== WORLD/GRID PARAMETERS ====================
-params.world.grid_rows = 20;               % Number of grid rows
-params.world.grid_cols = 20;               % Number of grid columns  
+params.world.grid_rows = 10;               % Number of grid rows
+params.world.grid_cols = 10;               % Number of grid columns  
 params.world.cell_size = 1.0;              % Size of each grid cell (m)
 params.world.mine_density = 0.1;           % Mine density (10% of cells)
-params.world.num_obstacles = 10;           % Number of random obstacles
+params.world.num_obstacles = 2;           % Number of random obstacles
 
 %% ==================== SIMULATION PARAMETERS ====================
 params.sim.dt = 0.005;                     % Time step (seconds)

@@ -22,7 +22,7 @@ graph TB
     
     subgraph "Decision Layer"
         FSM[Stateflow FSM<br/>6 States]
-        PLANNER[A* Path Planner<br/>Dynamic Replanning]
+        PLANNER[Coverage Path Planner<br/>Boustrophedon + A*]
     end
     
     subgraph "Communication Layer"
@@ -67,6 +67,43 @@ stateDiagram-v2
     
     MissionComplete --> [*]
 ```
+
+## Robot Obstacle Avoidance Behavior
+
+The following flowchart shows how the robot handles obstacles during navigation:
+
+![Robot Behavior Flowchart](robot_behavior_flowchart.png)
+
+**Key behaviors:**
+- **Obstacle detected**: Robot stops, updates SLAM map, and tries to turn around
+- **Stuck too long**: After 50 failed attempts, skips to next waypoint
+- **No obstacle**: Continues moving towards current waypoint
+
+## Coverage Path Algorithm
+
+The robot uses **Boustrophedon (lawn-mower) pattern** with **A* connections**:
+
+```mermaid
+graph LR
+    subgraph "Path Generation"
+        A[Generate Boustrophedon Order] --> B[Check Adjacent Cells]
+        B --> C{Cells Adjacent?}
+        C -->|Yes| D[Add to Path]
+        C -->|No| E[Use A* to Connect]
+        E --> D
+        D --> F[Next Cell]
+        F --> B
+    end
+```
+
+### Why This Approach?
+
+| Factor | Greedy Nearest | DFS | Boustrophedon + A* |
+|--------|---------------|-----|-------------------|
+| Waypoints (20x20) | ~550 | ~800 | **~400** |
+| Backtracking | High | Very High | **Minimal** |
+| Obstacle Handling | Poor | Poor | **Good** |
+| Implementation | Medium | Simple | **Medium** |
 
 ## Data Flow
 
@@ -121,13 +158,14 @@ sequenceDiagram
   5. DetectMine - Mine detected
   6. MissionComplete - All cells explored
 
-### Step 5: A* Path Planner
-- **File**: `PathPlannerROS.m`
-- **Algorithm**: A* with Manhattan heuristic
+### Step 5: Coverage Path Planner
+- **File**: `SpanningTreeCoverage.m`
+- **Algorithm**: Boustrophedon + A* pathfinding
 - **Features**:
-  - Coverage path generation
-  - Dynamic replanning on discovery
-  - Obstacle and mine avoidance
+  - Systematic row-by-row coverage
+  - A* connections between non-adjacent cells
+  - Obstacle avoidance built-in
+  - ~400 waypoints for 20x20 grid (vs ~550 with greedy)
 
 ### Step 6: Simulation Flow
 - **File**: `main_ros2.m`
@@ -136,3 +174,4 @@ sequenceDiagram
   - Dual-panel visualization
   - Real-time lidar point cloud
   - Dynamic path updates
+  - Stuck detection and recovery

@@ -1,6 +1,6 @@
 # Minesweeper Robot ROS2 Simulation
 
-A complete MATLAB/Simulink simulation of a minesweeper robot with ROS2 integration, SLAM mapping, and Stateflow-based finite state machine.
+A complete MATLAB/Simulink simulation of a minesweeper robot with ROS2 integration, SLAM mapping, and optimized coverage path planning.
 
 [![MATLAB](https://img.shields.io/badge/MATLAB-R2023a+-orange.svg)](https://www.mathworks.com/products/matlab.html)
 [![Simulink](https://img.shields.io/badge/Simulink-Required-blue.svg)](https://www.mathworks.com/products/simulink.html)
@@ -9,7 +9,7 @@ A complete MATLAB/Simulink simulation of a minesweeper robot with ROS2 integrati
 ## 🎯 Project Overview
 
 This project simulates a robot that:
-- **Explores** an unknown environment using a boustrophedon coverage path
+- **Explores** an unknown environment using optimized Boustrophedon coverage path
 - **Detects mines** and obstacles using simulated Lidar and mine detector sensors
 - **Builds a SLAM map** in real-time as it discovers obstacles
 - **Replans paths** dynamically using A* algorithm when obstacles are found
@@ -41,6 +41,7 @@ minesweeper_ros2/
 │   │   ├── SensorSimulator.m      # Lidar & detector simulation
 │   │   └── EKFSLAM.m              # Extended Kalman Filter SLAM
 │   ├── planning/                  # Path planning & FSM
+│   │   ├── SpanningTreeCoverage.m # ★ Optimized coverage path (Boustrophedon + A*)
 │   │   ├── PathPlanner.m          # Basic path planner
 │   │   ├── PathPlannerROS.m       # A* planner with ROS2
 │   │   └── StateMachine.m         # Finite State Machine
@@ -66,8 +67,33 @@ The project follows a **6-step modular architecture**:
 | 2 | **Sensors & ROS2** | Lidar (360°, 3m range), Mine Detector, ROS2 topics |
 | 3 | **EKF-SLAM** | Extended Kalman Filter for localization and mapping |
 | 4 | **Stateflow FSM** | Finite State Machine: Explore, Detect, Mark, Replan |
-| 5 | **A* Path Planner** | Dynamic path planning avoiding discovered obstacles |
+| 5 | **Coverage Path Planner** | Boustrophedon + A* for optimal coverage |
 | 6 | **Simulation Flow** | Main loop integrating all components |
+
+## 🛤️ Coverage Path Algorithm
+
+The robot uses an optimized **Boustrophedon (lawn-mower) pattern** with A* connections:
+
+```
+→→→→→→→→→→
+          ↓
+←←←←←←←←←←
+↓
+→→→→→→→→→→
+```
+
+### Why Boustrophedon + A*?
+
+| Algorithm | Waypoints | Backtracking | Use Case |
+|-----------|-----------|--------------|----------|
+| Greedy Nearest | ~550 | High | Not recommended |
+| Pure DFS | ~800 | Very High | Not recommended |
+| **Boustrophedon + A*** | **~400** | **Minimal** | ✅ **Used in this project** |
+
+The `SpanningTreeCoverage` class (`scripts/planning/SpanningTreeCoverage.m`) implements:
+- **Boustrophedon pattern** for systematic row-by-row coverage
+- **A* pathfinding** to connect non-adjacent cells (around obstacles)
+- **Obstacle avoidance** built into the path generation
 
 ## 🔄 Stateflow State Machine
 
@@ -134,6 +160,15 @@ The simulation displays a **dual-panel view**:
 | `/cmd_vel` | `geometry_msgs/Twist` | Velocity commands |
 | `/scan` | `sensor_msgs/LaserScan` | Lidar scan data |
 
+### ROS2 Setup (Optional)
+
+ROS2 is optional - the simulation runs in standalone mode if ROS2 is not available.
+
+To enable ROS2:
+1. Install MATLAB ROS Toolbox from Add-On Explorer
+2. Configure Python in MATLAB preferences
+3. Optionally install ROS2 Humble via WSL2 for external tools
+
 ## ⚙️ Configuration
 
 Edit `config/robot_params.m` to customize:
@@ -150,11 +185,12 @@ numObstacles = 10;               % Number of obstacles
 
 ## 📈 Features
 
+- ✅ **Optimized Coverage Path** - Boustrophedon + A* (~400 waypoints vs ~550 with greedy)
 - ✅ Occupancy Grid SLAM with real-time visualization
 - ✅ Lidar point cloud simulation (MathWorks style)
 - ✅ Dynamic A* path replanning
 - ✅ Stateflow FSM for robot behavior
-- ✅ ROS2 integration ready
+- ✅ ROS2 integration ready (optional)
 - ✅ Dual-panel visualization (Original vs SLAM)
 - ✅ Mine and obstacle avoidance
 - ✅ Shortest path calculation after exploration

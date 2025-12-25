@@ -65,12 +65,13 @@ function setup_project()
     fprintf('📄 Checking project files...\n');
     
     keyFiles = {
-        'main_ros2.m',                    'Main simulation script';
-        'config/robot_params.m',          'Configuration parameters';
-        'scripts/buildStateflowModel.m',  'Stateflow model builder';
-        'scripts/core/OccupancyGridWorld.m', 'World class';
-        'scripts/sensors/EKFSLAM.m',      'EKF-SLAM class';
-        'scripts/planning/PathPlannerROS.m', 'Path planner';
+        'main_ros2.m',                             'Main simulation script';
+        'config/robot_params.m',                   'Configuration parameters';
+        'scripts/buildStateflowModel.m',           'Stateflow model builder';
+        'scripts/core/OccupancyGridWorld.m',       'World class';
+        'scripts/sensors/EKFSLAM.m',               'EKF-SLAM class';
+        'scripts/planning/SpanningTreeCoverage.m', 'Coverage path planner (Boustrophedon + A*)';
+        'scripts/planning/PathPlannerROS.m',       'A* path planner';
     };
     
     allFiles = true;

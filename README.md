@@ -115,7 +115,7 @@ The robot behavior is controlled by a Stateflow FSM with 6 states:
 
 1. **Open MATLAB** and navigate to the project folder:
    ```matlab
-   cd('c:\Users\yousef\mapping')
+   cd('c:\path_to_project_folder\')
    ```
 
 2. **Setup project** (first time only):
